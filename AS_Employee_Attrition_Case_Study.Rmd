@@ -1,0 +1,1013 @@
+---
+title: "Employee Attrition Case Study"
+author: "Alex Salvo"
+output: html_document
+---
+#Executive Summary 
+
+Employee attrition presents a financial and operational challenge for Frito Lay. The objective of this analysis was to identify factors significantly associated with employee turnover, develop classification models to predict attrition, and evaluate potential replacement costs. The dataset contained 870 employees and 36 variables, with 140 employees (16.1%) leaving the company.
+Exploratory data analysis identified overtime, job involvement, and monthly income as three key factors associated with attrition. Employees working overtime had an attrition rate of 31.8%, compared with 9.7% among those who did not. Employees with the lowest job involvement had an attrition rate of 46.8%, compared with 8.6% among those with the highest involvement. Additionally, employees who left earned an average monthly income of 4,765 dollars , compared with 6,702 dollars for those who stayed. Chi-square tests and a Welch two-sample t-test provided sufficient statistical evidence to suggest significant associations or differences in means for these variables (p < 0.001).
+Two classification models, K-Nearest Neighbors (KNN) and Naive Bayes, were developed using eight predictors: OverTime, JobInvolvement, JobRole, StockOptionLevel, WorkLifeBalance, MonthlyIncome, YearsAtCompany, and Age. The data was divided into 70% training and 30% validation sets. On the validation data, KNN achieved 67.8% accuracy, 63.4% sensitivity, and 68.6% specificity. Naive Bayes performed better, achieving 77.8% accuracy, 73.2% sensitivity, and 78.6% specificity. Both models exceeded the target of 60% sensitivity and specificity, and Naive Bayes was selected as the preferred model.
+Additional findings showed that job role, stock option level, age, and years at the company were also significantly related to attrition, while years since last promotion was not statistically significant (p = 0.898). Financial analysis estimated employee replacement costs between $28,589 and $228,709 per employee, based on an average annual salary of $57,177 among employees who left. Providing a $200 retention incentive to the 77 employees flagged by Naive Bayes in the validation set would cost $15,400, although the effectiveness of this intervention remains unknown.
+Overall, the findings suggest that Frito Lay should focus on reviewing overtime demands, improving employee engagement, and evaluating compensation competitiveness. The Naive Bayes model provides a potential tool for identifying employees at risk of leaving and supporting more targeted retention decisions.
+
+# Introduction
+
+This report investigates employee attrition using exploratory data analysis, statistical tests, and two classification approaches: K-nearest neighbors (KNN) and Naive Bayes. The objective is to identify factors associated with employee attrition and evaluate predictive performance using accuracy, sensitivity, and specificity.
+
+
+## Data Import and Initial Exploration
+
+```{r analysis-1}
+# CASE STUDY LAY
+
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+
+#Import Data
+employees = read.csv('CaseStudy1-data.csv', header = TRUE)
+
+#Explore the Data
+head(employees)
+dim(employees)
+names(employees)
+str(employees)
+summary(employees)
+
+#Check for Missing Values
+sum(is.na(employees))
+```
+
+## Exploratory Data Analysis: Attrition and Employee Characteristics
+
+```{r analysis-2}
+#Overall Employee Attrition
+
+#Percentage of Employees by Attrition Status
+AttritionSummary = employees %>%
+  group_by(Attrition) %>%
+  summarize(
+    Total = n(),
+    Percentage = Total / nrow(employees) * 100
+  )
+
+#View Results
+AttritionSummary
+
+#Visualize Employee Attrition Percentage
+AttritionSummary %>%
+  ggplot(aes(x = Attrition, y = Percentage, fill = Attrition)) +
+  geom_col() +
+  ggtitle("Employee Attrition Percentage") +
+  xlab("Attrition Status") +
+  ylab("Percentage of Employees (%)")
+
+
+#Overtime and Employee Attrition
+
+#Percentage of Employees Leaving by Overtime
+OvertimeSummary = employees %>%
+  group_by(OverTime) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  )
+
+#View Results
+OvertimeSummary
+
+#Visualize Attrition Rate by Overtime
+OvertimeSummary %>%
+  ggplot(aes(x = OverTime, y = AttritionRate, fill = OverTime)) +
+  geom_col() +
+  ggtitle("Attrition Rate by Overtime") +
+  xlab("Overtime") +
+  ylab("Attrition Rate (%)")
+
+
+#Job Satisfaction and Employee Attrition
+
+#Attrition Percentage by Job Satisfaction
+JobSatisfactionSummary = employees %>%
+  group_by(JobSatisfaction) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = mean(Attrition == "Yes") * 100
+  ) %>%
+  arrange(JobSatisfaction)
+
+#View Results
+JobSatisfactionSummary
+
+#Visualize Attrition Rate by Job Satisfaction
+JobSatisfactionSummary %>%
+  ggplot(aes(x = factor(JobSatisfaction), y = AttritionRate)) +
+  geom_col() +
+  ggtitle("Attrition Rate by Job Satisfaction") +
+  xlab("Job Satisfaction Level") +
+  ylab("Attrition Rate (%)")
+
+# Environment Satisfaction and Employee Attrition
+
+#Attrition Percentage by Environment Satisfaction
+EnvironmentSummary = employees %>%
+  group_by(EnvironmentSatisfaction) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  ) %>%
+  arrange(EnvironmentSatisfaction)
+
+#View Results
+EnvironmentSummary
+
+#Visualize Attrition Rate by Environment Satisfaction
+EnvironmentSummary %>%
+  ggplot(aes(x = factor(EnvironmentSatisfaction), y = AttritionRate)) +
+  geom_col() +
+  ggtitle("Attrition Rate by Environment Satisfaction") +
+  xlab("Environment Satisfaction Level") +
+  ylab("Attrition Rate (%)")
+
+# Business Travel and Employee Attrition
+
+#Attrition Percentage by Business Travel
+BusinessTravelSummary = employees %>%
+  group_by(BusinessTravel) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  ) %>%
+  arrange(desc(AttritionRate))
+
+#View Results
+BusinessTravelSummary
+
+#Visualize Attrition Rate by Business Travel
+BusinessTravelSummary %>%
+  ggplot(aes(x = BusinessTravel, y = AttritionRate)) +
+  geom_col() +
+  ggtitle("Attrition Rate by Business Travel") +
+  xlab("Business Travel") +
+  ylab("Attrition Rate (%)")
+
+#Monthly Income and Employee Attrition
+
+#Average Monthly Income by Attrition
+IncomeSummary = employees %>%
+  group_by(Attrition) %>%
+  summarize(
+    Total = n(),
+    AverageIncome = mean(MonthlyIncome),
+    MedianIncome = median(MonthlyIncome)
+  )
+
+#View Results
+IncomeSummary
+
+#Visualize Monthly Income by Attrition
+employees %>%
+  ggplot(aes(x = Attrition, y = MonthlyIncome)) +
+  geom_boxplot() +
+  ggtitle("Monthly Income by Attrition") +
+  xlab("Attrition Status") +
+  ylab("Monthly Income")
+
+
+# Years at Company and Employee Attrition
+
+#Average Years at Company by Attrition
+YearsSummary = employees %>%
+  group_by(Attrition) %>%
+  summarize(
+    Total = n(),
+    AverageYears = mean(YearsAtCompany),
+    MedianYears = median(YearsAtCompany)
+  )
+
+#View Results
+YearsSummary
+
+#Visualize Years at Company by Attrition
+employees %>%
+  ggplot(aes(x = Attrition, y = YearsAtCompany)) +
+  geom_boxplot() +
+  ggtitle("Years at Company by Attrition") +
+  xlab("Attrition Status") +
+  ylab("Years at Company")
+
+
+#Age and Employee Attrition
+
+#Average Age by Attrition
+AgeSummary = employees %>%
+  group_by(Attrition) %>%
+  summarize(
+    Total = n(),
+    AverageAge = mean(Age),
+    MedianAge = median(Age)
+  )
+
+#View Results
+AgeSummary
+
+#Visualize Age by Attrition
+employees %>%
+  ggplot(aes(x = Attrition, y = Age)) +
+  geom_boxplot() +
+  ggtitle("Age by Attrition") +
+  xlab("Attrition Status") +
+  ylab("Age")
+
+#Review Remaining Variables
+
+#View All Variable Names
+names(employees)
+
+#View Structure of Variables
+str(employees)
+
+
+
+
+
+
+
+# Examine Variable Categories
+
+#Check Variables with Potentially Constant Values
+table(employees$EmployeeCount)
+table(employees$Over18)
+table(employees$StandardHours)
+
+#Check Job Involvement Levels
+table(employees$JobInvolvement)
+
+#Check Work Life Balance Levels
+table(employees$WorkLifeBalance)
+
+#Check Job Level Categories
+table(employees$JobLevel)
+
+#Check Marital Status Categories
+table(employees$MaritalStatus)
+
+#Check Job Role Categories
+table(employees$JobRole)
+
+
+
+
+# Distance From Home and Employee Attrition
+
+#Average Distance From Home by Attrition
+DistanceSummary = employees %>%
+  group_by(Attrition) %>%
+  summarize(
+    Total = n(),
+    AverageDistance = mean(DistanceFromHome),
+    MedianDistance = median(DistanceFromHome)
+  )
+
+#View Results
+DistanceSummary
+
+#Visualize Distance From Home by Attrition
+employees %>%
+  ggplot(aes(x = Attrition, y = DistanceFromHome)) +
+  geom_boxplot() +
+  ggtitle("Distance From Home by Attrition") +
+  xlab("Attrition Status") +
+  ylab("Distance From Home")
+
+
+
+
+#Compare Remaining Categorical Variables
+
+#Job Involvement and Attrition
+JobInvolvementSummary = employees %>%
+  group_by(JobInvolvement) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  ) %>%
+  arrange(JobInvolvement)
+
+JobInvolvementSummary
+
+
+#Work Life Balance and Attrition
+WorkLifeBalanceSummary = employees %>%
+  group_by(WorkLifeBalance) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  ) %>%
+  arrange(WorkLifeBalance)
+
+WorkLifeBalanceSummary
+
+
+#Job Level and Attrition
+JobLevelSummary = employees %>%
+  group_by(JobLevel) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  ) %>%
+  arrange(JobLevel)
+
+JobLevelSummary
+
+
+#Job Role and Attrition
+JobRoleSummary = employees %>%
+  group_by(JobRole) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  ) %>%
+  arrange(desc(AttritionRate))
+
+JobRoleSummary
+
+
+#Marital Status and Attrition
+MaritalStatusSummary = employees %>%
+  group_by(MaritalStatus) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  ) %>%
+  arrange(desc(AttritionRate))
+
+MaritalStatusSummary
+
+
+
+
+#Compare Remaining Numerical Variables
+
+#Total Working Years and Attrition
+employees %>%
+  group_by(Attrition) %>%
+  summarize(
+    AverageYears = mean(TotalWorkingYears),
+    MedianYears = median(TotalWorkingYears)
+  )
+
+#Years in Current Role and Attrition
+employees %>%
+  group_by(Attrition) %>%
+  summarize(
+    AverageYears = mean(YearsInCurrentRole),
+    MedianYears = median(YearsInCurrentRole)
+  )
+
+#Years with Current Manager and Attrition
+employees %>%
+  group_by(Attrition) %>%
+  summarize(
+    AverageYears = mean(YearsWithCurrManager),
+    MedianYears = median(YearsWithCurrManager)
+  )
+
+#Years Since Last Promotion and Attrition
+employees %>%
+  group_by(Attrition) %>%
+  summarize(
+    AverageYears = mean(YearsSinceLastPromotion),
+    MedianYears = median(YearsSinceLastPromotion)
+  )
+
+#Number of Companies Worked and Attrition
+employees %>%
+  group_by(Attrition) %>%
+  summarize(
+    AverageCompanies = mean(NumCompaniesWorked),
+    MedianCompanies = median(NumCompaniesWorked)
+  )
+
+#Training Times Last Year and Attrition
+employees %>%
+  group_by(Attrition) %>%
+  summarize(
+    AverageTraining = mean(TrainingTimesLastYear),
+    MedianTraining = median(TrainingTimesLastYear)
+  )
+
+
+
+# Explore Additional Categorical Variables
+
+#Stock Option Level and Attrition
+StockOptionSummary = employees %>%
+  group_by(StockOptionLevel) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  ) %>%
+  arrange(StockOptionLevel)
+
+StockOptionSummary
+
+
+#Relationship Satisfaction and Attrition
+RelationshipSummary = employees %>%
+  group_by(RelationshipSatisfaction) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  ) %>%
+  arrange(RelationshipSatisfaction)
+
+RelationshipSummary
+
+
+#Department and Attrition
+DepartmentSummary = employees %>%
+  group_by(Department) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  ) %>%
+  arrange(desc(AttritionRate))
+
+DepartmentSummary
+
+
+#Education Field and Attrition
+EducationFieldSummary = employees %>%
+  group_by(EducationField) %>%
+  summarize(
+    Total = n(),
+    Left = sum(Attrition == "Yes"),
+    AttritionRate = Left / Total * 100
+  ) %>%
+  arrange(desc(AttritionRate))
+
+EducationFieldSummary
+
+
+
+
+
+
+#Visualize Important Attrition Factors
+
+#Visualize Attrition Rate by Job Involvement
+JobInvolvementSummary %>%
+  ggplot(aes(x = factor(JobInvolvement), y = AttritionRate)) +
+  geom_col() +
+  ggtitle("Attrition Rate by Job Involvement") +
+  xlab("Job Involvement Level") +
+  ylab("Attrition Rate (%)")
+
+
+#Visualize Attrition Rate by Stock Option Level
+StockOptionSummary %>%
+  ggplot(aes(x = factor(StockOptionLevel), y = AttritionRate)) +
+  geom_col() +
+  ggtitle("Attrition Rate by Stock Option Level") +
+  xlab("Stock Option Level") +
+  ylab("Attrition Rate (%)")
+
+
+#Visualize Attrition Rate by Job Role
+JobRoleSummary %>%
+  ggplot(aes(x = reorder(JobRole, AttritionRate), y = AttritionRate)) +
+  geom_col() +
+  coord_flip() +
+  ggtitle("Attrition Rate by Job Role") +
+  xlab("Job Role") +
+  ylab("Attrition Rate (%)")
+```
+
+## Statistical Tests
+
+Chi-square tests assess associations between categorical characteristics and attrition. Two-sample t-tests compare the mean numerical characteristics of employees who leave and those who stay.
+
+```{r analysis-3}
+#Statistical Tests for Employee Attrition
+
+#Chi-Square Tests for Categorical Variables
+
+#Chi-Square Test for OverTime
+OverTimeTable = table(employees$OverTime, employees$Attrition)
+OverTimeTest = chisq.test(OverTimeTable)
+
+OverTimeTable
+OverTimeTest
+
+
+#Chi-Square Test for JobInvolvement
+JobInvolvementTable = table(employees$JobInvolvement,
+                            employees$Attrition)
+JobInvolvementTest = chisq.test(JobInvolvementTable)
+
+JobInvolvementTable
+JobInvolvementTest
+
+
+#Chi-Square Test for JobRole
+JobRoleTable = table(employees$JobRole, employees$Attrition)
+JobRoleTest = chisq.test(JobRoleTable)
+
+JobRoleTable
+JobRoleTest
+
+
+#Chi-Square Test for StockOptionLevel
+StockOptionTable = table(employees$StockOptionLevel,
+                         employees$Attrition)
+StockOptionTest = chisq.test(StockOptionTable)
+
+StockOptionTable
+StockOptionTest
+
+
+#Two-Sample T-Tests for Numerical Variables
+
+#T-Test for MonthlyIncome
+IncomeTest = t.test(MonthlyIncome ~ Attrition, data = employees)
+IncomeTest
+
+
+#T-Test for TotalWorkingYears
+WorkingYearsTest = t.test(TotalWorkingYears ~ Attrition,
+                          data = employees)
+WorkingYearsTest
+
+
+#T-Test for Age
+AgeTest = t.test(Age ~ Attrition, data = employees)
+AgeTest
+
+
+#T-Test for YearsAtCompany
+YearsTest = t.test(YearsAtCompany ~ Attrition, data = employees)
+YearsTest
+```
+
+## Predictive Modeling: Preparation and Train/Validation Split
+
+```{r analysis-4}
+#--------------------------------------------------------
+
+#MODELING 
+
+
+library(class)
+library(caret)
+
+#Select Important Variables Based on EDA
+ModelData = employees %>%
+  select(Attrition, OverTime, JobInvolvement, JobRole,
+         StockOptionLevel, WorkLifeBalance, MonthlyIncome,
+         YearsAtCompany, Age)
+
+#Convert Attrition and Categorical Predictors to Factors
+ModelData$Attrition = factor(ModelData$Attrition,
+                             levels = c("Yes", "No"))
+
+ModelData$OverTime = factor(ModelData$OverTime)
+ModelData$JobRole = factor(ModelData$JobRole)
+
+#Check for Missing Values
+sum(is.na(ModelData))
+
+#Split Data into Training and Validation Sets
+set.seed(1)
+
+splitPerc = .7
+
+trainIndices = sample(1:nrow(ModelData),
+                      round(splitPerc * nrow(ModelData)))
+
+train = ModelData[trainIndices, ]
+test = ModelData[-trainIndices, ]
+
+#Check Training and Validation Data
+dim(train)
+dim(test)
+
+table(train$Attrition)
+table(test$Attrition)
+
+#Check Attrition Percentages
+prop.table(table(train$Attrition)) * 100
+prop.table(table(test$Attrition)) * 100
+```
+
+## KNN: Dummy Variables, Scaling and Choosing K
+
+```{r analysis-5}
+#Convert Categorical Variables for KNN
+
+#Select Predictor Variables
+trainPredictors = train %>%
+  select(-Attrition)
+
+testPredictors = test %>%
+  select(-Attrition)
+
+#Create Dummy Variables Using Training Data
+DummyModel = dummyVars(~ ., data = trainPredictors,
+                       fullRank = TRUE)
+
+#Convert Training and Validation Data
+trainX = predict(DummyModel, newdata = trainPredictors)
+testX = predict(DummyModel, newdata = testPredictors)
+
+#Check Converted Variables
+head(trainX)
+dim(trainX)
+dim(testX)
+
+
+
+
+
+#Standardize Variables for KNN
+
+#Center and Scale Using Training Data
+standardizeModel = preProcess(trainX,
+                              method = c("center", "scale"))
+
+trainStandardized = predict(standardizeModel, trainX)
+testStandardized = predict(standardizeModel, testX)
+
+
+#Compare Different K Values
+
+#Create Data Frame for Results
+accs = data.frame(Accuracy = numeric(30),
+                  Sensitivity = numeric(30),
+                  Specificity = numeric(30),
+                  k = numeric(30))
+
+#Test K Values from 1 to 30
+set.seed(1)
+
+for(i in 1:30) {
+  
+  classifications = knn.cv(
+    train = trainStandardized,
+    cl = train$Attrition,
+    k = i
+  )
+  
+  CM = confusionMatrix(classifications,
+                       train$Attrition,
+                       positive = "Yes")
+  
+  accs$Accuracy[i] = CM$overall["Accuracy"]
+  accs$Sensitivity[i] = CM$byClass["Sensitivity"]
+  accs$Specificity[i] = CM$byClass["Specificity"]
+  accs$k[i] = i
+}
+
+#View Results
+accs
+
+#Plot Accuracy by K
+plot(accs$k, accs$Accuracy,
+     type = "l",
+     xlab = "K",
+     ylab = "Accuracy",
+     main = "KNN Accuracy by K")
+
+#Plot Sensitivity by K
+plot(accs$k, accs$Sensitivity,
+     type = "l",
+     xlab = "K",
+     ylab = "Sensitivity",
+     main = "KNN Sensitivity by K")
+
+#Plot Specificity by K
+plot(accs$k, accs$Specificity,
+     type = "l",
+     xlab = "K",
+     ylab = "Specificity",
+     main = "KNN Specificity by K")
+```
+
+## KNN: ROC Curve and Classification Threshold
+
+```{r analysis-6}
+#Find KNN Classification Threshold Using ROC
+
+library(pROC)
+
+#Choose K Based on Previous Results
+bestK = 3
+
+#KNN Cross-Validation on Training Data
+set.seed(1)
+
+trainClassifications = knn.cv(
+  train = trainStandardized,
+  cl = train$Attrition,
+  k = bestK,
+  prob = TRUE
+)
+
+#Extract KNN Winning Class Probability
+knn_winprob = attr(trainClassifications, "prob")
+
+#Convert to Attrition Vote Proportion
+p_pos_knn = ifelse(trainClassifications == "Yes",
+                   knn_winprob, 1 - knn_winprob)
+
+#ROC Curve for KNN
+roc_knn = roc(response = train$Attrition,
+              predictor = p_pos_knn,
+              levels = c("No", "Yes"),
+              direction = "<")
+
+#View ROC and AUC
+roc_knn
+auc(roc_knn)
+
+#Plot ROC Curve
+plot(roc_knn, main = "KNN ROC Curve")
+
+
+#Find Optimal Threshold Using Youden's J
+bestThreshold = as.numeric(
+  coords(roc_knn, x = "best",
+         best.method = "youden",
+         ret = "threshold")
+)
+
+bestThreshold
+
+#Classify Training Employees Using Selected Threshold
+trainPredictions = factor(
+  ifelse(p_pos_knn >= bestThreshold, "Yes", "No"),
+  levels = c("Yes", "No")
+)
+
+#Training Cross-Validation Confusion Matrix
+CMTrain = confusionMatrix(trainPredictions,
+                          train$Attrition,
+                          positive = "Yes")
+
+CMTrain
+```
+
+## KNN: Validation Results
+
+The validation confusion matrix reports performance on held-out employees. Here, `Yes` is the positive class.
+
+```{r analysis-7}
+# Evaluate KNN on Validation Data
+
+#Run KNN Using Selected K
+set.seed(1)
+
+classifications = knn(
+  train = trainStandardized,
+  test = testStandardized,
+  cl = train$Attrition,
+  k = bestK,
+  prob = TRUE
+)
+
+#Extract KNN Winning Class Probability
+knn_winprob = attr(classifications, "prob")
+
+#Convert to Attrition Vote Proportion
+p_pos_knn = ifelse(classifications == "Yes",
+                   knn_winprob, 1 - knn_winprob)
+
+#Apply Selected Threshold
+KNNPredictions = factor(
+  ifelse(p_pos_knn >= bestThreshold, "Yes", "No"),
+  levels = c("Yes", "No")
+)
+
+#Validation Confusion Matrix
+CMTest = confusionMatrix(KNNPredictions,
+                         test$Attrition,
+                         positive = "Yes")
+
+CMTest
+
+#Accuracy, Sensitivity and Specificity
+CMTest$overall["Accuracy"]
+CMTest$byClass["Sensitivity"]
+CMTest$byClass["Specificity"]
+```
+
+## Naive Bayes: Model and ROC Analysis
+
+```{r analysis-8}
+# Build Naive Bayes Classification Model
+
+library(e1071)
+
+#Use Same Training and Validation Data as KNN
+NBTrain = train
+NBTest = test
+
+#Build Naive Bayes Model
+NBModel = naiveBayes(Attrition ~ ., data = NBTrain,
+                     laplace = 1)
+
+#View Model
+NBModel
+
+
+# Find Naive Bayes Classification Threshold Using ROC
+
+#Training Predicted Probabilities
+NBTrainProb = predict(NBModel, NBTrain, type = "raw")
+
+#Probability of Attrition = Yes
+p_pos_nb = NBTrainProb[, "Yes"]
+
+#ROC Curve for Naive Bayes
+roc_nb = roc(response = NBTrain$Attrition,
+             predictor = p_pos_nb,
+             levels = c("No", "Yes"),
+             direction = "<")
+
+#View ROC and AUC
+roc_nb
+auc(roc_nb)
+
+#Plot ROC Curve
+plot(roc_nb, main = "Naive Bayes ROC Curve")
+
+#Find Optimal Threshold Using Youden's J
+bestThresholdNB = as.numeric(
+  coords(roc_nb, x = "best",
+         best.method = "youden",
+         ret = "threshold")
+)
+
+bestThresholdNB
+
+#Classify Training Employees
+NBTrainPredictions = factor(
+  ifelse(p_pos_nb >= bestThresholdNB, "Yes", "No"),
+  levels = c("Yes", "No")
+)
+
+#Training Confusion Matrix
+CMTrainNB = confusionMatrix(NBTrainPredictions,
+                            NBTrain$Attrition,
+                            positive = "Yes")
+
+CMTrainNB
+```
+
+## Naive Bayes: Validation Results
+
+```{r analysis-9}
+#Evaluate Naive Bayes on Validation Data
+
+#Predict Attrition Probabilities
+NBTestProb = predict(NBModel, NBTest, type = "raw")
+
+#Probability of Attrition = Yes
+p_pos_nb = NBTestProb[, "Yes"]
+
+#Apply Selected Threshold
+NBPredictions = factor(
+  ifelse(p_pos_nb >= bestThresholdNB, "Yes", "No"),
+  levels = c("Yes", "No")
+)
+
+#Validation Confusion Matrix
+CMTestNB = confusionMatrix(NBPredictions,
+                           NBTest$Attrition,
+                           positive = "Yes")
+
+CMTestNB
+
+#Accuracy, Sensitivity and Specificity
+CMTestNB$overall["Accuracy"]
+CMTestNB$byClass["Sensitivity"]
+CMTestNB$byClass["Specificity"]
+```
+
+## Naive Bayes: Alternative Classification Threshold
+
+```{r analysis-10}
+# Change Naive Bayes Classification Threshold
+
+#Set New Threshold
+thresholdNB = 0.25
+
+#Training Predictions
+NBTrainProb = predict(NBModel, NBTrain, type = "raw")
+
+NBTrainPredictions = factor(
+  ifelse(NBTrainProb[, "Yes"] >= thresholdNB, "Yes", "No"),
+  levels = c("Yes", "No")
+)
+
+#Training Confusion Matrix
+CMTrainNB25 = confusionMatrix(NBTrainPredictions,
+                              NBTrain$Attrition,
+                              positive = "Yes")
+
+CMTrainNB25
+
+#Validation Predictions
+NBTestProb = predict(NBModel, NBTest, type = "raw")
+
+NBPredictions = factor(
+  ifelse(NBTestProb[, "Yes"] >= thresholdNB, "Yes", "No"),
+  levels = c("Yes", "No")
+)
+
+#Validation Confusion Matrix
+CMTestNB25 = confusionMatrix(NBPredictions,
+                             NBTest$Attrition,
+                             positive = "Yes")
+
+CMTestNB25
+```
+
+## Naive Bayes: Repeated Cross-Validation
+
+Repeated resampling provides an additional view of the variability in Naive Bayes performance within the training portion of the data.
+
+```{r analysis-11}
+#Naive Bayes Repeated Cross-Validation
+
+set.seed(1)
+
+iterations = 100
+splitPerc = .7
+
+#Store Results
+masterAcc = matrix(nrow = iterations)
+masterSens = matrix(nrow = iterations)
+masterSpec = matrix(nrow = iterations)
+
+#Repeat Training and Testing
+for(j in 1:iterations)
+{
+  
+  #Split Training Data
+  trainIndicesNB = sample(1:nrow(NBTrain),
+                          round(splitPerc * nrow(NBTrain)))
+  
+  trainCV = NBTrain[trainIndicesNB, ]
+  testCV = NBTrain[-trainIndicesNB, ]
+  
+  #Build Naive Bayes Model
+  modelCV = naiveBayes(Attrition ~ ., data = trainCV,
+                       laplace = 1)
+  
+  #Predict Probabilities
+  probabilitiesCV = predict(modelCV, testCV,
+                            type = "raw")
+  
+  #Apply Threshold
+  predictionsCV = factor(
+    ifelse(probabilitiesCV[, "Yes"] >= thresholdNB,
+           "Yes", "No"),
+    levels = c("Yes", "No")
+  )
+  
+  #Confusion Matrix
+  CM = confusionMatrix(predictionsCV,
+                       testCV$Attrition,
+                       positive = "Yes")
+  
+  #Store Results
+  masterAcc[j] = CM$overall["Accuracy"]
+  masterSens[j] = CM$byClass["Sensitivity"]
+  masterSpec[j] = CM$byClass["Specificity"]
+}
+
+#Average Results
+MeanAcc = colMeans(masterAcc)
+MeanSens = colMeans(masterSens)
+MeanSpec = colMeans(masterSpec)
+
+MeanAcc
+MeanSens
+MeanSpec
+```
+
+
